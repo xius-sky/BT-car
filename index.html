@@ -46,7 +46,6 @@
     margin-bottom: 16px;
   }
 
-  /* STATUS BAR */
   .status-bar {
     width: 100%;
     max-width: 420px;
@@ -78,7 +77,6 @@
   .status-text { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
   .status-text.connected { color: var(--green); }
 
-  /* CONNECT BUTTON */
   .btn-connect {
     width: 100%;
     max-width: 420px;
@@ -98,7 +96,6 @@
   .btn-connect.connected { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.06); }
   .btn-connect.connecting { border-color: var(--yellow); color: var(--yellow); }
 
-  /* MIC */
   .mic-section {
     display: flex;
     flex-direction: column;
@@ -150,27 +147,6 @@
 
   .mic-hint { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
 
-  /* LANGUAGE TOGGLE */
-  .lang-toggle {
-    display: flex;
-    gap: 6px;
-    margin-top: 10px;
-  }
-  .lang-btn {
-    background: var(--card);
-    border: 1.5px solid var(--border);
-    border-radius: 20px;
-    padding: 5px 12px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    font-family: inherit;
-  }
-  .lang-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
-
-  /* TRANSCRIPT */
   .transcript {
     width: 100%;
     max-width: 420px;
@@ -183,7 +159,6 @@
   .t-label { font-size: 0.65rem; color: var(--muted); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; }
   .t-text { font-size: 0.95rem; min-height: 22px; }
 
-  /* MODE TABS */
   .section-label {
     width: 100%;
     max-width: 420px;
@@ -227,7 +202,6 @@
     line-height: 1.4;
   }
 
-  /* CRUISE PANEL (mode B) */
   .cruise-panel {
     width: 100%;
     max-width: 420px;
@@ -257,7 +231,6 @@
   }
   .cruise-btn.active { background: rgba(255,61,90,0.08); border-color: var(--red); color: var(--red); }
 
-  /* LAST COMMAND */
   .last-cmd {
     width: 100%;
     max-width: 420px;
@@ -279,7 +252,6 @@
   .cmd-sent { font-size: 0.7rem; color: var(--green); font-weight: 700; display: none; }
   .cmd-sent.show { display: block; }
 
-  /* COMMAND BUTTONS */
   .cmd-grid {
     width: 100%;
     max-width: 420px;
@@ -306,7 +278,6 @@
   .cmd-btn-word { font-size: 0.73rem; font-weight: 700; }
   .cmd-btn-char { font-size: 0.62rem; color: var(--muted); font-family: monospace; margin-top: 1px; }
 
-  /* RAW COMMAND INPUT */
   .raw-row {
     width: 100%;
     max-width: 420px;
@@ -345,7 +316,6 @@
     margin-bottom: 16px;
   }
 
-  /* LOG */
   .log {
     width: 100%;
     max-width: 420px;
@@ -395,10 +365,6 @@
     <button class="btn-mic" id="btn-mic" onclick="toggleListen()" disabled>🎤</button>
   </div>
   <div class="mic-hint" id="mic-hint">Connect first to enable voice</div>
-  <div class="lang-toggle">
-    <button class="lang-btn active" id="lang-id" onclick="setLang('id-ID')">🇮🇩 Indonesia</button>
-    <button class="lang-btn" id="lang-en" onclick="setLang('en-US')">🇬🇧 English</button>
-  </div>
 </div>
 
 <div class="transcript">
@@ -406,16 +372,16 @@
   <div class="t-text" id="transcript">—</div>
 </div>
 
-<div class="section-label">Mode suara</div>
+<div class="section-label">Voice Mode</div>
 <div class="mode-tabs">
   <button class="mode-tab active" id="tab-A" onclick="setMode('A')">🅰️ Command</button>
   <button class="mode-tab" id="tab-B" onclick="setMode('B')">🅱️ Cruise</button>
 </div>
-<div class="mode-desc" id="mode-desc">Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.</div>
+<div class="mode-desc" id="mode-desc">Speak 1 command = the car executes 1 movement, then stops waiting for the next command.</div>
 
 <div class="cruise-panel" id="cruise-panel">
-  <div class="cruise-status" id="cruise-status">⏸ Cruise nonaktif</div>
-  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Mulai Jalan</button>
+  <div class="cruise-status" id="cruise-status">⏸ Cruise inactive</div>
+  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Start Driving</button>
 </div>
 
 <div class="last-cmd" id="last-cmd">
@@ -486,65 +452,47 @@
   </div>
 </div>
 
-<div class="section-label">Atau tulis kode sendiri</div>
+<div class="section-label">Or type custom code</div>
 <div class="raw-row">
-  <input type="text" id="raw-input" class="raw-input" placeholder="misal: FFF atau DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
-  <button class="raw-send" onclick="sendRawInput()">Kirim</button>
+  <input type="text" id="raw-input" class="raw-input" placeholder="e.g., FFF or DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
+  <button class="raw-send" onclick="sendRawInput()">Send</button>
 </div>
-<div class="raw-hint">Bisa gabung beberapa huruf sekaligus (misal "FFRB"). Maks ± 18 karakter sekali kirim (batas Bluetooth).</div>
+<div class="raw-hint">Combine multiple letters (e.g., 'FFRB'). Max ~18 characters per send (Bluetooth limit).</div>
 
 <div class="log" id="log"></div>
 
 <script>
-// Bluetooth UART UUIDs (micro:bit UART Service)
-// PENTING: 6E400002 = TX Characteristic → micro:bit yang KIRIM data ke HP (cuma Indicate, TIDAK bisa ditulis)
-//          6E400003 = RX Characteristic → HP yang KIRIM data ke micro:bit (Write / Write Without Response)
-// Sesuai spesifikasi resmi Bluetooth profile micro:bit (Bluetooth Developer Studio Profile Report)
 const UART_SVC  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // write (phone → microbit) — INI YANG BENER
+const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'
 
 let btDevice = null
 let btChar   = null
 let connected = false
 let listening = false
 let recognition = null
-let voiceLang = 'id-ID'
-let currentMode = 'A'   // 'A' = command per perintah, 'B' = cruise (jalan terus)
+let voiceLang = 'en-US'
+let currentMode = 'A'   
 let cruiseActive = false
 let cruiseTimer = null
 
-// ---- VOICE COMMANDS (Mode A) ----
-// Kata kunci lebih panjang/spesifik ("spin left") dicek duluan sebelum yang
-// pendek ("left"), biar ga ketuker pas ngomong frasa gabungan.
 const CMDS = {
   'forward':      { c:'F', name:'Forward',    icon:'⬆️' },
-  'maju':         { c:'F', name:'Forward',    icon:'⬆️' },
   'backward':     { c:'B', name:'Backward',   icon:'⬇️' },
   'reverse':      { c:'B', name:'Backward',   icon:'⬇️' },
-  'mundur':       { c:'B', name:'Backward',   icon:'⬇️' },
   'spin right':   { c:'U', name:'Spin Right', icon:'↩️' },
-  'putar kanan':  { c:'U', name:'Spin Right', icon:'↩️' },
   'spin left':    { c:'V', name:'Spin Left',  icon:'↪️' },
-  'putar kiri':   { c:'V', name:'Spin Left',  icon:'↪️' },
   'sharp turn':   { c:'M', name:'Sharp Turn', icon:'🌀' },
-  'belok tajam':  { c:'M', name:'Sharp Turn', icon:'🌀' },
   'left':         { c:'L', name:'Left',       icon:'⬅️' },
-  'kiri':         { c:'L', name:'Left',       icon:'⬅️' },
   'right':        { c:'R', name:'Right',      icon:'➡️' },
-  'kanan':        { c:'R', name:'Right',      icon:'➡️' },
   'stop':         { c:'T', name:'Stop',       icon:'🛑' },
   'halt':         { c:'T', name:'Stop',       icon:'🛑' },
-  'berhenti':     { c:'T', name:'Stop',       icon:'🛑' },
   'horn':         { c:'K', name:'Horn',       icon:'📯' },
   'honk':         { c:'K', name:'Horn',       icon:'📯' },
-  'klakson':      { c:'K', name:'Horn',       icon:'📯' },
   'zigzag':       { c:'D', name:'Zigzag',     icon:'〰️' },
   'dance':        { c:'DANCE', name:'Dance Party', icon:'💃' },
-  'joget':        { c:'DANCE', name:'Dance Party', icon:'💃' },
 }
 const CMD_KEYS_BY_LENGTH = Object.keys(CMDS).sort((a, b) => b.length - a.length)
 
-// ---- LOG ----
 function log(msg, type='') {
   const el = document.getElementById('log')
   const t = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
@@ -555,7 +503,6 @@ function log(msg, type='') {
   if (el.children.length > 40) el.lastChild.remove()
 }
 
-// ---- BLUETOOTH ----
 async function connectBluetooth() {
   if (!navigator.bluetooth) {
     alert('Web Bluetooth not supported.\nUse Chrome on Android.')
@@ -634,8 +581,6 @@ function setStatus(s) {
   }
 }
 
-// sendRaw = fungsi inti buat kirim TEKS APAPUN (1 huruf ataupun beberapa
-// huruf sekaligus, misal "DANCE" atau "FFRB") ke micro:bit.
 async function sendRaw(text, name, icon) {
   if (!connected || !btChar) { log('Not connected!', 'err'); return }
   if (!text) return
@@ -644,14 +589,12 @@ async function sendRaw(text, name, icon) {
     await btChar.writeValueWithoutResponse(enc.encode(text + '\n'))
     log('Sent "' + text + '" → ' + name, 'ok')
 
-    // Update last command display
     document.getElementById('cmd-icon').textContent = icon
     document.getElementById('cmd-name').textContent = name
     document.getElementById('cmd-detail').textContent = 'Text "' + text + '" sent'
     document.getElementById('cmd-sent').classList.add('show')
     document.getElementById('last-cmd').classList.add('sent')
 
-    // Flash button kalau ada tombol yang cocok
     const btn = document.getElementById('cb-' + text)
     if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 600) }
 
@@ -665,12 +608,10 @@ async function sendRaw(text, name, icon) {
   }
 }
 
-// sendCmd dipertahankan biar tombol-tombol lama tetep jalan tanpa perlu diubah
 function sendCmd(char, name, icon) {
   return sendRaw(char, name, icon)
 }
 
-// Kirim dari kotak teks manual
 function sendRawInput() {
   const el = document.getElementById('raw-input')
   const text = el.value.trim().toUpperCase()
@@ -679,32 +620,29 @@ function sendRawInput() {
   el.value = ''
 }
 
-// ---- MODE A / MODE B ----
 function setMode(m) {
   currentMode = m
   document.getElementById('tab-A').classList.toggle('active', m === 'A')
   document.getElementById('tab-B').classList.toggle('active', m === 'B')
   document.getElementById('cruise-panel').style.display = m === 'B' ? 'flex' : 'none'
   document.getElementById('mode-desc').textContent = m === 'A'
-    ? 'Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.'
-    : 'Mobil jalan terus ke depan. Ngomong "kiri"/"kanan" buat belok sambil tetep jalan, "berhenti" buat stop.'
+    ? 'Speak 1 command = the car executes 1 movement, then stops waiting for the next command.'
+    : 'The car moves forward continuously. Say "left"/"right" to steer, "stop" to halt.'
   if (m === 'A' && cruiseActive) stopCruise()
-  log('Ganti ke Mode ' + m, 'info')
+  log('Switched to Mode ' + m, 'info')
 }
 
-// ---- CRUISE (Mode B: mobil jalan terus, suara cuma nyetir) ----
 function toggleCruise() {
   cruiseActive ? stopCruise() : startCruise()
 }
 
 function startCruise() {
-  if (!connected) { log('Connect ke Micro:bit dulu sebelum mulai cruise!', 'err'); return }
+  if (!connected) { log('Connect to Micro:bit first!', 'err'); return }
   cruiseActive = true
   sendRaw('F', 'Cruise: Forward', '⬆️')
-  // Kirim ulang "F" tiap ~2.3 detik (dikit lebih lama dari durasi F di firmware
-  // yang 2 detik) biar mobil tetep jalan terus tanpa nunggu diem dulu
-  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 2300)
-  document.getElementById('cruise-status').textContent = '▶️ Cruise aktif — jalan terus'
+  // Update interval to 400ms to keep the 600ms watchdog alive seamlessly
+  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 400)
+  document.getElementById('cruise-status').textContent = '▶️ Cruise active — continuous drive'
   const btn = document.getElementById('cruise-btn')
   btn.textContent = '⏹ Stop Cruise'
   btn.classList.add('active')
@@ -715,21 +653,11 @@ function stopCruise() {
   cruiseActive = false
   if (cruiseTimer) { clearInterval(cruiseTimer); cruiseTimer = null }
   sendRaw('T', 'Cruise: Stop', '🛑')
-  document.getElementById('cruise-status').textContent = '⏸ Cruise nonaktif'
+  document.getElementById('cruise-status').textContent = '⏸ Cruise inactive'
   const btn = document.getElementById('cruise-btn')
-  btn.textContent = '▶️ Mulai Jalan'
+  btn.textContent = '▶️ Start Driving'
   btn.classList.remove('active')
   log('Cruise mode OFF', 'info')
-}
-
-// ---- SPEECH ----
-function setLang(lang) {
-  voiceLang = lang
-  document.getElementById('lang-id').classList.toggle('active', lang === 'id-ID')
-  document.getElementById('lang-en').classList.toggle('active', lang === 'en-US')
-  if (recognition) recognition.lang = lang
-  log('Bahasa suara: ' + lang, 'info')
-  if (listening) { stopListening(); startListening() }
 }
 
 function toggleListen() {
@@ -804,20 +732,20 @@ function processVoice(text) {
 }
 
 function processVoiceCruise(text) {
-  if (text.includes('kiri') || text.includes('left')) {
-    sendRaw('LF', 'Cruise: Belok Kiri', '⬅️')
-    log('Cruise: belok kiri lalu lanjut maju', 'ok')
-  } else if (text.includes('kanan') || text.includes('right')) {
-    sendRaw('RF', 'Cruise: Belok Kanan', '➡️')
-    log('Cruise: belok kanan lalu lanjut maju', 'ok')
-  } else if (text.includes('berhenti') || text.includes('stop') || text.includes('halt')) {
+  if (text.includes('left')) {
+    sendRaw('LF', 'Cruise: Steer Left', '⬅️')
+    log('Cruise: steered left', 'ok')
+  } else if (text.includes('right')) {
+    sendRaw('RF', 'Cruise: Steer Right', '➡️')
+    log('Cruise: steered right', 'ok')
+  } else if (text.includes('stop') || text.includes('halt')) {
     stopCruise()
-  } else if (text.includes('maju') || text.includes('jalan') || text.includes('go') || text.includes('forward')) {
+  } else if (text.includes('go') || text.includes('forward') || text.includes('drive')) {
     if (!cruiseActive) startCruise()
-  } else if (text.includes('klakson') || text.includes('horn') || text.includes('honk')) {
+  } else if (text.includes('horn') || text.includes('honk')) {
     sendRaw('K', 'Horn', '📯')
   } else {
-    log('Ga dikenali di mode cruise: "' + text + '"', 'err')
+    log('Command not recognized in cruise: "' + text + '"', 'err')
   }
 }
 
