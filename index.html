@@ -1,3 +1,4 @@
+cat > /mnt/user-data/outputs/voice-car-control-v2.html << 'PYEOF'
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -396,7 +397,7 @@
   </div>
   <div class="mic-hint" id="mic-hint">Connect first to enable voice</div>
   <div class="lang-toggle">
-    <button class="lang-btn active" id="lang-id" onclick="setLang('id-ID')">🇮🇩 Indonesia</button>
+    <button class="lang-btn active" id="lang-id" onclick="setLang('id-ID')">🇮🇩 Indonesian</button>
     <button class="lang-btn" id="lang-en" onclick="setLang('en-US')">🇬🇧 English</button>
   </div>
 </div>
@@ -406,16 +407,16 @@
   <div class="t-text" id="transcript">—</div>
 </div>
 
-<div class="section-label">Mode suara</div>
+<div class="section-label">Voice Mode</div>
 <div class="mode-tabs">
   <button class="mode-tab active" id="tab-A" onclick="setMode('A')">🅰️ Command</button>
   <button class="mode-tab" id="tab-B" onclick="setMode('B')">🅱️ Cruise</button>
 </div>
-<div class="mode-desc" id="mode-desc">Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.</div>
+<div class="mode-desc" id="mode-desc">Say one command = the car does one move, then waits for the next command.</div>
 
 <div class="cruise-panel" id="cruise-panel">
-  <div class="cruise-status" id="cruise-status">⏸ Cruise nonaktif</div>
-  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Mulai Jalan</button>
+  <div class="cruise-status" id="cruise-status">⏸ Cruise off</div>
+  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Start Driving</button>
 </div>
 
 <div class="last-cmd" id="last-cmd">
@@ -486,22 +487,22 @@
   </div>
 </div>
 
-<div class="section-label">Atau tulis kode sendiri</div>
+<div class="section-label">Or write your own code</div>
 <div class="raw-row">
-  <input type="text" id="raw-input" class="raw-input" placeholder="misal: FFF atau DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
-  <button class="raw-send" onclick="sendRawInput()">Kirim</button>
+  <input type="text" id="raw-input" class="raw-input" placeholder="e.g. FFF or DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
+  <button class="raw-send" onclick="sendRawInput()">Send</button>
 </div>
-<div class="raw-hint">Bisa gabung beberapa huruf sekaligus (misal "FFRB"). Maks ± 18 karakter sekali kirim (batas Bluetooth).</div>
+<div class="raw-hint">You can combine several letters at once (e.g. "FFRB"). Max ~18 characters per message (Bluetooth limit).</div>
 
 <div class="log" id="log"></div>
 
 <script>
 // Bluetooth UART UUIDs (micro:bit UART Service)
-// PENTING: 6E400002 = TX Characteristic → micro:bit yang KIRIM data ke HP (cuma Indicate, TIDAK bisa ditulis)
-//          6E400003 = RX Characteristic → HP yang KIRIM data ke micro:bit (Write / Write Without Response)
-// Sesuai spesifikasi resmi Bluetooth profile micro:bit (Bluetooth Developer Studio Profile Report)
+// NOTE: 6E400002 = TX Characteristic -> micro:bit SENDS data to phone (Indicate only, not writable)
+//       6E400003 = RX Characteristic -> phone SENDS data to micro:bit (Write / Write Without Response)
+// Matches the official micro:bit Bluetooth profile (Bluetooth Developer Studio Profile Report)
 const UART_SVC  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // write (phone → microbit) — INI YANG BENER
+const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // write (phone -> microbit) -- THIS ONE
 
 let btDevice = null
 let btChar   = null
@@ -509,13 +510,19 @@ let connected = false
 let listening = false
 let recognition = null
 let voiceLang = 'id-ID'
-let currentMode = 'A'   // 'A' = command per perintah, 'B' = cruise (jalan terus)
+let currentMode = 'A'   // 'A' = one command per phrase, 'B' = cruise (continuous drive)
 let cruiseActive = false
 let cruiseTimer = null
 
+// Serializes every Bluetooth write so overlapping sends (cruise auto-forward,
+// a manual tap, a voice command) never collide and throw a
+// "GATT operation already in progress" error.
+let writeChain = Promise.resolve()
+
 // ---- VOICE COMMANDS (Mode A) ----
-// Kata kunci lebih panjang/spesifik ("spin left") dicek duluan sebelum yang
-// pendek ("left"), biar ga ketuker pas ngomong frasa gabungan.
+// Longer/more specific phrases ("spin left") are checked before short ones
+// ("left"), so a combined phrase never gets matched by the shorter word first.
+// Both English and Indonesian keywords are supported for speech recognition.
 const CMDS = {
   'forward':      { c:'F', name:'Forward',    icon:'⬆️' },
   'maju':         { c:'F', name:'Forward',    icon:'⬆️' },
@@ -634,11 +641,22 @@ function setStatus(s) {
   }
 }
 
-// sendRaw = fungsi inti buat kirim TEKS APAPUN (1 huruf ataupun beberapa
-// huruf sekaligus, misal "DANCE" atau "FFRB") ke micro:bit.
-async function sendRaw(text, name, icon) {
-  if (!connected || !btChar) { log('Not connected!', 'err'); return }
-  if (!text) return
+// sendRaw = core function to send ANY text (a single letter or several at
+// once, e.g. "DANCE" or "FFRB") to the micro:bit. Every call is queued onto
+// writeChain so writes never overlap, which is what caused the Horn/Dance
+// "error" before (a write firing while cruise's auto-forward was mid-flight).
+function sendRaw(text, name, icon) {
+  if (!connected || !btChar) { log('Not connected!', 'err'); return Promise.resolve() }
+  if (!text) return Promise.resolve()
+  writeChain = writeChain.then(
+    () => doSend(text, name, icon),
+    () => doSend(text, name, icon) // keep the queue alive even if a previous write failed
+  )
+  return writeChain
+}
+
+async function doSend(text, name, icon) {
+  if (!connected || !btChar) return
   try {
     const enc = new TextEncoder()
     await btChar.writeValueWithoutResponse(enc.encode(text + '\n'))
@@ -651,7 +669,7 @@ async function sendRaw(text, name, icon) {
     document.getElementById('cmd-sent').classList.add('show')
     document.getElementById('last-cmd').classList.add('sent')
 
-    // Flash button kalau ada tombol yang cocok
+    // Flash the matching button, if any
     const btn = document.getElementById('cb-' + text)
     if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 600) }
 
@@ -665,12 +683,12 @@ async function sendRaw(text, name, icon) {
   }
 }
 
-// sendCmd dipertahankan biar tombol-tombol lama tetep jalan tanpa perlu diubah
+// sendCmd kept so the buttons above don't need to change
 function sendCmd(char, name, icon) {
   return sendRaw(char, name, icon)
 }
 
-// Kirim dari kotak teks manual
+// Send from the manual text box
 function sendRawInput() {
   const el = document.getElementById('raw-input')
   const text = el.value.trim().toUpperCase()
@@ -686,25 +704,26 @@ function setMode(m) {
   document.getElementById('tab-B').classList.toggle('active', m === 'B')
   document.getElementById('cruise-panel').style.display = m === 'B' ? 'flex' : 'none'
   document.getElementById('mode-desc').textContent = m === 'A'
-    ? 'Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.'
-    : 'Mobil jalan terus ke depan. Ngomong "kiri"/"kanan" buat belok sambil tetep jalan, "berhenti" buat stop.'
+    ? 'Say one command = the car does one move, then waits for the next command.'
+    : 'The car drives forward continuously. Say "left"/"right" to steer while still moving, or "stop" to stop.'
   if (m === 'A' && cruiseActive) stopCruise()
-  log('Ganti ke Mode ' + m, 'info')
+  log('Switched to Mode ' + m, 'info')
 }
 
-// ---- CRUISE (Mode B: mobil jalan terus, suara cuma nyetir) ----
+// ---- CRUISE (Mode B: car keeps driving, voice only steers) ----
 function toggleCruise() {
   cruiseActive ? stopCruise() : startCruise()
 }
 
 function startCruise() {
-  if (!connected) { log('Connect ke Micro:bit dulu sebelum mulai cruise!', 'err'); return }
+  if (!connected) { log('Connect to the Micro:bit first before starting cruise!', 'err'); return }
   cruiseActive = true
   sendRaw('F', 'Cruise: Forward', '⬆️')
-  // Kirim ulang "F" tiap ~2.3 detik (dikit lebih lama dari durasi F di firmware
-  // yang 2 detik) biar mobil tetep jalan terus tanpa nunggu diem dulu
-  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 2300)
-  document.getElementById('cruise-status').textContent = '▶️ Cruise aktif — jalan terus'
+  // Resend "F" every 1.8s -- shorter than the firmware's own 2s hold per F,
+  // so the next "F" always arrives before the current one ends and the
+  // watchdog on the micro:bit never sees a gap. No stop-start stutter.
+  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 1800)
+  document.getElementById('cruise-status').textContent = '▶️ Cruise on — driving'
   const btn = document.getElementById('cruise-btn')
   btn.textContent = '⏹ Stop Cruise'
   btn.classList.add('active')
@@ -715,9 +734,9 @@ function stopCruise() {
   cruiseActive = false
   if (cruiseTimer) { clearInterval(cruiseTimer); cruiseTimer = null }
   sendRaw('T', 'Cruise: Stop', '🛑')
-  document.getElementById('cruise-status').textContent = '⏸ Cruise nonaktif'
+  document.getElementById('cruise-status').textContent = '⏸ Cruise off'
   const btn = document.getElementById('cruise-btn')
-  btn.textContent = '▶️ Mulai Jalan'
+  btn.textContent = '▶️ Start Driving'
   btn.classList.remove('active')
   log('Cruise mode OFF', 'info')
 }
@@ -728,7 +747,7 @@ function setLang(lang) {
   document.getElementById('lang-id').classList.toggle('active', lang === 'id-ID')
   document.getElementById('lang-en').classList.toggle('active', lang === 'en-US')
   if (recognition) recognition.lang = lang
-  log('Bahasa suara: ' + lang, 'info')
+  log('Voice language: ' + lang, 'info')
   if (listening) { stopListening(); startListening() }
 }
 
@@ -805,11 +824,11 @@ function processVoice(text) {
 
 function processVoiceCruise(text) {
   if (text.includes('kiri') || text.includes('left')) {
-    sendRaw('LF', 'Cruise: Belok Kiri', '⬅️')
-    log('Cruise: belok kiri lalu lanjut maju', 'ok')
+    sendRaw('LF', 'Cruise: Turn Left', '⬅️')
+    log('Cruise: turning left, then continuing forward', 'ok')
   } else if (text.includes('kanan') || text.includes('right')) {
-    sendRaw('RF', 'Cruise: Belok Kanan', '➡️')
-    log('Cruise: belok kanan lalu lanjut maju', 'ok')
+    sendRaw('RF', 'Cruise: Turn Right', '➡️')
+    log('Cruise: turning right, then continuing forward', 'ok')
   } else if (text.includes('berhenti') || text.includes('stop') || text.includes('halt')) {
     stopCruise()
   } else if (text.includes('maju') || text.includes('jalan') || text.includes('go') || text.includes('forward')) {
@@ -817,7 +836,7 @@ function processVoiceCruise(text) {
   } else if (text.includes('klakson') || text.includes('horn') || text.includes('honk')) {
     sendRaw('K', 'Horn', '📯')
   } else {
-    log('Ga dikenali di mode cruise: "' + text + '"', 'err')
+    log('Not recognized in cruise mode: "' + text + '"', 'err')
   }
 }
 
@@ -825,3 +844,4 @@ log('App ready. Connect to Micro:bit to start.', 'info')
 </script>
 </body>
 </html>
+PYEOF
