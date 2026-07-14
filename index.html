@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Voice Car Control v3</title>
+<title>Voice Car Control</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -406,23 +406,23 @@
   <div class="t-text" id="transcript">—</div>
 </div>
 
-<div class="section-label">Voice Mode</div>
+<div class="section-label">Mode suara</div>
 <div class="mode-tabs">
   <button class="mode-tab active" id="tab-A" onclick="setMode('A')">🅰️ Command</button>
   <button class="mode-tab" id="tab-B" onclick="setMode('B')">🅱️ Cruise</button>
 </div>
-<div class="mode-desc" id="mode-desc">Speak 1 command = car executes 1 action, then stops.</div>
+<div class="mode-desc" id="mode-desc">Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.</div>
 
 <div class="cruise-panel" id="cruise-panel">
-  <div class="cruise-status" id="cruise-status">⏸ Cruise Inactive</div>
-  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Start Driving</button>
+  <div class="cruise-status" id="cruise-status">⏸ Cruise nonaktif</div>
+  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Mulai Jalan</button>
 </div>
 
 <div class="last-cmd" id="last-cmd">
   <div class="cmd-icon" id="cmd-icon">⏳</div>
   <div class="cmd-info">
     <div class="cmd-name" id="cmd-name">Waiting for command</div>
-    <div class="cmd-detail" id="cmd-detail">Nothing queued yet</div>
+    <div class="cmd-detail" id="cmd-detail">Nothing sent yet</div>
     <div class="cmd-sent" id="cmd-sent">✓ Sent to Micro:bit</div>
   </div>
 </div>
@@ -454,7 +454,7 @@
     <div class="cmd-btn-word">Right</div>
     <div class="cmd-btn-char">R</div>
   </div>
-  <div class="cmd-btn" id="cb-K" onclick="sendCmd('K','Horn (Crash Warning)','📯')">
+  <div class="cmd-btn" id="cb-K" onclick="sendCmd('K','Horn','📯')">
     <div class="cmd-btn-icon">📯</div>
     <div class="cmd-btn-word">Horn</div>
     <div class="cmd-btn-char">K</div>
@@ -479,40 +479,43 @@
     <div class="cmd-btn-word">Spin Left</div>
     <div class="cmd-btn-char">V</div>
   </div>
-  <div class="cmd-btn" id="cb-DANCE" onclick="sendCmd('DANCE','Dance Party (Crash Warning)','💃')">
+  <div class="cmd-btn" id="cb-DANCE" onclick="sendCmd('DANCE','Dance Party','💃')">
     <div class="cmd-btn-icon">💃</div>
     <div class="cmd-btn-word">Dance</div>
     <div class="cmd-btn-char">DANCE</div>
   </div>
 </div>
 
-<div class="section-label">Or enter raw commands</div>
+<div class="section-label">Atau tulis kode sendiri</div>
 <div class="raw-row">
-  <input type="text" id="raw-input" class="raw-input" placeholder="e.g.: FFF or DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
-  <button class="raw-send" onclick="sendRawInput()">Send</button>
+  <input type="text" id="raw-input" class="raw-input" placeholder="misal: FFF atau DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
+  <button class="raw-send" onclick="sendRawInput()">Kirim</button>
 </div>
-<div class="raw-hint">Combine multiple letters (e.g., FFRB). App will perfectly pace and sequence them.</div>
+<div class="raw-hint">Bisa gabung beberapa huruf sekaligus (misal "FFRB"). Maks ± 18 karakter sekali kirim (batas Bluetooth).</div>
 
 <div class="log" id="log"></div>
 
 <script>
-const UART_SVC  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+// Bluetooth UART UUIDs (micro:bit UART Service)
+// PENTING: 6E400002 = TX Characteristic → micro:bit yang KIRIM data ke HP (cuma Indicate, TIDAK bisa ditulis)
+//          6E400003 = RX Characteristic → HP yang KIRIM data ke micro:bit (Write / Write Without Response)
+// Sesuai spesifikasi resmi Bluetooth profile micro:bit (Bluetooth Developer Studio Profile Report)
+const UART_SVC  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // write (phone → microbit) — INI YANG BENER
 
-let btDevice = null;
-let btChar   = null;
-let connected = false;
-let listening = false;
-let recognition = null;
-let voiceLang = 'id-ID';
-let currentMode = 'A';
-let cruiseActive = false;
-let cruiseTimer = null;
+let btDevice = null
+let btChar   = null
+let connected = false
+let listening = false
+let recognition = null
+let voiceLang = 'id-ID'
+let currentMode = 'A'   // 'A' = command per perintah, 'B' = cruise (jalan terus)
+let cruiseActive = false
+let cruiseTimer = null
 
-// NEW: Smart Command Queue System
-let commandQueue = [];
-let isSendingQueue = false;
-
+// ---- VOICE COMMANDS (Mode A) ----
+// Kata kunci lebih panjang/spesifik ("spin left") dicek duluan sebelum yang
+// pendek ("left"), biar ga ketuker pas ngomong frasa gabungan.
 const CMDS = {
   'forward':      { c:'F', name:'Forward',    icon:'⬆️' },
   'maju':         { c:'F', name:'Forward',    icon:'⬆️' },
@@ -539,339 +542,286 @@ const CMDS = {
   'dance':        { c:'DANCE', name:'Dance Party', icon:'💃' },
   'joget':        { c:'DANCE', name:'Dance Party', icon:'💃' },
 }
-const CMD_KEYS_BY_LENGTH = Object.keys(CMDS).sort((a, b) => b.length - a.length);
+const CMD_KEYS_BY_LENGTH = Object.keys(CMDS).sort((a, b) => b.length - a.length)
 
+// ---- LOG ----
 function log(msg, type='') {
-  const el = document.getElementById('log');
-  const t = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const row = document.createElement('div');
-  row.className = 'log-row';
-  row.innerHTML = `<span class="log-t">${t}</span><span class="log-m ${type}">${msg}</span>`;
-  el.prepend(row);
-  if (el.children.length > 40) el.lastChild.remove();
+  const el = document.getElementById('log')
+  const t = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  const row = document.createElement('div')
+  row.className = 'log-row'
+  row.innerHTML = `<span class="log-t">${t}</span><span class="log-m ${type}">${msg}</span>`
+  el.prepend(row)
+  if (el.children.length > 40) el.lastChild.remove()
 }
 
+// ---- BLUETOOTH ----
 async function connectBluetooth() {
   if (!navigator.bluetooth) {
-    alert('Web Bluetooth not supported.\nUse Chrome on Android.');
-    return;
+    alert('Web Bluetooth not supported.\nUse Chrome on Android.')
+    return
   }
-  if (connected) { disconnect(); return; }
+  if (connected) { disconnect(); return }
 
   try {
-    setStatus('connecting');
-    log('Searching for Micro:bit...', 'info');
+    setStatus('connecting')
+    log('Searching for Micro:bit...', 'info')
 
     btDevice = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: 'BBC micro:bit' }],
       optionalServices: [UART_SVC]
-    });
+    })
 
-    btDevice.addEventListener('gattserverdisconnected', onDisconnected);
-    log('Connecting to ' + btDevice.name + '...', 'info');
+    btDevice.addEventListener('gattserverdisconnected', onDisconnected)
+    log('Connecting to ' + btDevice.name + '...', 'info')
 
-    const server  = await btDevice.gatt.connect();
-    const service = await server.getPrimaryService(UART_SVC);
-    btChar        = await service.getCharacteristic(UART_RX);
+    const server  = await btDevice.gatt.connect()
+    const service = await server.getPrimaryService(UART_SVC)
+    btChar        = await service.getCharacteristic(UART_RX)
 
-    setStatus('connected');
-    document.getElementById('device-name').textContent = btDevice.name;
-    log('Connected to ' + btDevice.name, 'ok');
+    setStatus('connected')
+    document.getElementById('device-name').textContent = btDevice.name
+    log('Connected to ' + btDevice.name, 'ok')
 
-    document.getElementById('btn-mic').disabled = false;
-    document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command';
+    document.getElementById('btn-mic').disabled = false
+    document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command'
 
   } catch(e) {
-    setStatus('disconnected');
-    log('Failed: ' + e.message, 'err');
+    setStatus('disconnected')
+    log('Failed: ' + e.message, 'err')
   }
 }
 
 function disconnect() {
-  if (btDevice && btDevice.gatt.connected) btDevice.gatt.disconnect();
+  if (btDevice && btDevice.gatt.connected) btDevice.gatt.disconnect()
 }
 
 function onDisconnected() {
-  connected = false;
-  btChar = null;
-  commandQueue = []; // Clear queue on disconnect
-  isSendingQueue = false;
-  setStatus('disconnected');
-  document.getElementById('device-name').textContent = '';
-  log('Micro:bit disconnected', 'err');
-  document.getElementById('btn-mic').disabled = true;
-  document.getElementById('mic-hint').textContent = 'Connect first to enable voice';
-  if (listening) stopListening();
-  if (cruiseActive) stopCruise();
+  connected = false
+  btChar = null
+  setStatus('disconnected')
+  document.getElementById('device-name').textContent = ''
+  log('Micro:bit disconnected', 'err')
+  document.getElementById('btn-mic').disabled = true
+  document.getElementById('mic-hint').textContent = 'Connect first to enable voice'
+  if (listening) stopListening()
+  if (cruiseActive) stopCruise()
 }
 
 function setStatus(s) {
-  const dot  = document.getElementById('dot');
-  const text = document.getElementById('status-text');
-  const btn  = document.getElementById('btn-connect');
-  dot.className = 'dot';
+  const dot  = document.getElementById('dot')
+  const text = document.getElementById('status-text')
+  const btn  = document.getElementById('btn-connect')
+  dot.className = 'dot'
   if (s === 'connected') {
-    connected = true;
-    dot.classList.add('connected');
-    text.textContent = 'Connected';
-    text.className = 'status-text connected';
-    btn.className = 'btn-connect connected';
-    btn.textContent = '✓ Connected — Tap to disconnect';
+    connected = true
+    dot.classList.add('connected')
+    text.textContent = 'Connected'
+    text.className = 'status-text connected'
+    btn.className = 'btn-connect connected'
+    btn.textContent = '✓ Connected — Tap to disconnect'
   } else if (s === 'connecting') {
-    dot.classList.add('connecting');
-    text.textContent = 'Connecting...';
-    text.className = 'status-text';
-    btn.className = 'btn-connect connecting';
-    btn.textContent = '⏳ Connecting...';
+    dot.classList.add('connecting')
+    text.textContent = 'Connecting...'
+    text.className = 'status-text'
+    btn.className = 'btn-connect connecting'
+    btn.textContent = '⏳ Connecting...'
   } else {
-    text.textContent = 'Not connected';
-    text.className = 'status-text';
-    btn.className = 'btn-connect';
-    btn.textContent = '📡 Connect to Micro:bit';
+    text.textContent = 'Not connected'
+    text.className = 'status-text'
+    btn.className = 'btn-connect'
+    btn.textContent = '📡 Connect to Micro:bit'
   }
 }
 
-// THE SMART SEQUENCER: Overrides internal buffering to fix stutters & spins
-async function processQueue() {
-  if (commandQueue.length === 0) {
-    isSendingQueue = false;
-    return;
-  }
-  isSendingQueue = true;
-  const cmd = commandQueue.shift();
-
+// sendRaw = fungsi inti buat kirim TEKS APAPUN (1 huruf ataupun beberapa
+// huruf sekaligus, misal "DANCE" atau "FFRB") ke micro:bit.
+async function sendRaw(text, name, icon) {
+  if (!connected || !btChar) { log('Not connected!', 'err'); return }
+  if (!text) return
   try {
-    const enc = new TextEncoder();
-    await btChar.writeValueWithoutResponse(enc.encode(cmd + '\n'));
-    log('Executed: ' + cmd, 'ok');
+    const enc = new TextEncoder()
+    await btChar.writeValueWithoutResponse(enc.encode(text + '\n'))
+    log('Sent "' + text + '" → ' + name, 'ok')
+
+    // Update last command display
+    document.getElementById('cmd-icon').textContent = icon
+    document.getElementById('cmd-name').textContent = name
+    document.getElementById('cmd-detail').textContent = 'Text "' + text + '" sent'
+    document.getElementById('cmd-sent').classList.add('show')
+    document.getElementById('last-cmd').classList.add('sent')
+
+    // Flash button kalau ada tombol yang cocok
+    const btn = document.getElementById('cb-' + text)
+    if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 600) }
+
+    setTimeout(() => {
+      document.getElementById('last-cmd').classList.remove('sent')
+      document.getElementById('cmd-sent').classList.remove('show')
+    }, 1500)
+
   } catch(e) {
-    log('Send failed: ' + e.message, 'err');
-  }
-
-  // Calculate precise hardware delay before sending the next command
-  let delayMs = 1000;
-  if (cmd === 'F' || cmd === 'B') {
-    // 1800ms guarantees the next F hits right before the 2000ms watchdog logic! 
-    // This perfectly eliminates stuttering.
-    delayMs = 1800; 
-  } else if (cmd === 'L' || cmd === 'R') {
-    // 400(showArrow) + 350(move) + 200(brakeNow) = 950ms. Fixes the >360° spin!
-    delayMs = 950; 
-  } else if (cmd === 'M') {
-    delayMs = 1250;
-  } else if (cmd === 'U' || cmd === 'V') {
-    delayMs = 2600;
-  } else if (cmd === 'D') {
-    delayMs = 1800;
-  } else if (cmd === 'T') {
-    delayMs = 700;
-  } else if (cmd === 'K' || cmd === 'DANCE') {
-    delayMs = 2000; 
-  }
-
-  setTimeout(processQueue, delayMs);
-}
-
-function sendRaw(text, name, icon) {
-  if (!connected || !btChar) { log('Not connected!', 'err'); return; }
-  if (!text) return;
-
-  // Visual UI Updates
-  document.getElementById('cmd-icon').textContent = icon;
-  document.getElementById('cmd-name').textContent = name;
-  document.getElementById('cmd-detail').textContent = 'Queued "' + text + '"';
-  document.getElementById('cmd-sent').classList.add('show');
-  document.getElementById('last-cmd').classList.add('sent');
-
-  const btn = document.getElementById('cb-' + text);
-  if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 600); }
-
-  setTimeout(() => {
-    document.getElementById('last-cmd').classList.remove('sent');
-    document.getElementById('cmd-sent').classList.remove('show');
-  }, 1500);
-
-  // Stop Command override - clears queue immediately
-  if (text === 'T') {
-    commandQueue = []; 
-    try {
-      const enc = new TextEncoder();
-      btChar.writeValueWithoutResponse(enc.encode('T\n'));
-      log('Executed: T (Emergency Stop)', 'ok');
-    } catch(e) {}
-    isSendingQueue = false;
-    return;
-  }
-
-  // Queue pushing
-  if (text === 'DANCE') {
-    commandQueue.push('DANCE');
-  } else {
-    // Break "FFF" into ['F', 'F', 'F']
-    for (let i = 0; i < text.length; i++) {
-      commandQueue.push(text[i]);
-    }
-  }
-
-  if (!isSendingQueue) {
-    processQueue();
+    log('Send failed: ' + e.message, 'err')
   }
 }
 
+// sendCmd dipertahankan biar tombol-tombol lama tetep jalan tanpa perlu diubah
 function sendCmd(char, name, icon) {
-  return sendRaw(char, name, icon);
+  return sendRaw(char, name, icon)
 }
 
+// Kirim dari kotak teks manual
 function sendRawInput() {
-  const el = document.getElementById('raw-input');
-  const text = el.value.trim().toUpperCase();
-  if (!text) return;
-  sendRaw(text, 'Manual: ' + text, '⌨️');
-  el.value = '';
+  const el = document.getElementById('raw-input')
+  const text = el.value.trim().toUpperCase()
+  if (!text) return
+  sendRaw(text, 'Manual: ' + text, '⌨️')
+  el.value = ''
 }
 
+// ---- MODE A / MODE B ----
 function setMode(m) {
-  currentMode = m;
-  document.getElementById('tab-A').classList.toggle('active', m === 'A');
-  document.getElementById('tab-B').classList.toggle('active', m === 'B');
-  document.getElementById('cruise-panel').style.display = m === 'B' ? 'flex' : 'none';
+  currentMode = m
+  document.getElementById('tab-A').classList.toggle('active', m === 'A')
+  document.getElementById('tab-B').classList.toggle('active', m === 'B')
+  document.getElementById('cruise-panel').style.display = m === 'B' ? 'flex' : 'none'
   document.getElementById('mode-desc').textContent = m === 'A'
-    ? 'Speak 1 command = car executes 1 action, then stops.'
-    : 'Car drives forward continuously. Speak "left"/"right" to steer, "stop" to halt.';
-  
-  if (m === 'A' && cruiseActive) stopCruise();
-  log('Switched to Mode ' + m, 'info');
+    ? 'Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.'
+    : 'Mobil jalan terus ke depan. Ngomong "kiri"/"kanan" buat belok sambil tetep jalan, "berhenti" buat stop.'
+  if (m === 'A' && cruiseActive) stopCruise()
+  log('Ganti ke Mode ' + m, 'info')
 }
 
+// ---- CRUISE (Mode B: mobil jalan terus, suara cuma nyetir) ----
 function toggleCruise() {
-  cruiseActive ? stopCruise() : startCruise();
+  cruiseActive ? stopCruise() : startCruise()
 }
 
 function startCruise() {
-  if (!connected) { log('Connect to Micro:bit first!', 'err'); return; }
-  cruiseActive = true;
-  sendRaw('F', 'Cruise: Forward', '⬆️');
-  
-  // Set interval perfectly to 1800ms to eliminate stutter
-  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 1800);
-  
-  document.getElementById('cruise-status').textContent = '▶️ Cruise Active — Driving';
-  const btn = document.getElementById('cruise-btn');
-  btn.textContent = '⏹ Stop Cruise';
-  btn.classList.add('active');
-  log('Cruise mode ON', 'ok');
+  if (!connected) { log('Connect ke Micro:bit dulu sebelum mulai cruise!', 'err'); return }
+  cruiseActive = true
+  sendRaw('F', 'Cruise: Forward', '⬆️')
+  // Kirim ulang "F" tiap ~2.3 detik (dikit lebih lama dari durasi F di firmware
+  // yang 2 detik) biar mobil tetep jalan terus tanpa nunggu diem dulu
+  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 2300)
+  document.getElementById('cruise-status').textContent = '▶️ Cruise aktif — jalan terus'
+  const btn = document.getElementById('cruise-btn')
+  btn.textContent = '⏹ Stop Cruise'
+  btn.classList.add('active')
+  log('Cruise mode ON', 'ok')
 }
 
 function stopCruise() {
-  cruiseActive = false;
-  if (cruiseTimer) { clearInterval(cruiseTimer); cruiseTimer = null; }
-  sendRaw('T', 'Cruise: Stop', '🛑');
-  document.getElementById('cruise-status').textContent = '⏸ Cruise Inactive';
-  const btn = document.getElementById('cruise-btn');
-  btn.textContent = '▶️ Start Driving';
-  btn.classList.remove('active');
-  log('Cruise mode OFF', 'info');
+  cruiseActive = false
+  if (cruiseTimer) { clearInterval(cruiseTimer); cruiseTimer = null }
+  sendRaw('T', 'Cruise: Stop', '🛑')
+  document.getElementById('cruise-status').textContent = '⏸ Cruise nonaktif'
+  const btn = document.getElementById('cruise-btn')
+  btn.textContent = '▶️ Mulai Jalan'
+  btn.classList.remove('active')
+  log('Cruise mode OFF', 'info')
 }
 
+// ---- SPEECH ----
 function setLang(lang) {
-  voiceLang = lang;
-  document.getElementById('lang-id').classList.toggle('active', lang === 'id-ID');
-  document.getElementById('lang-en').classList.toggle('active', lang === 'en-US');
-  if (recognition) recognition.lang = lang;
-  log('Voice language: ' + lang, 'info');
-  if (listening) { stopListening(); startListening(); }
+  voiceLang = lang
+  document.getElementById('lang-id').classList.toggle('active', lang === 'id-ID')
+  document.getElementById('lang-en').classList.toggle('active', lang === 'en-US')
+  if (recognition) recognition.lang = lang
+  log('Bahasa suara: ' + lang, 'info')
+  if (listening) { stopListening(); startListening() }
 }
 
 function toggleListen() {
-  listening ? stopListening() : startListening();
+  listening ? stopListening() : startListening()
 }
 
 function startListening() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { alert('Speech Recognition not supported.\nUse Chrome on Android.'); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) { alert('Speech Recognition not supported.\nUse Chrome on Android.'); return }
 
-  recognition = new SR();
-  recognition.lang = voiceLang;
-  recognition.continuous = true;
-  recognition.interimResults = true;
+  recognition = new SR()
+  recognition.lang = voiceLang
+  recognition.continuous = true
+  recognition.interimResults = true
 
   recognition.onstart = () => {
-    listening = true;
-    document.getElementById('btn-mic').classList.add('listening');
-    document.getElementById('btn-mic').textContent = '⏹';
-    document.getElementById('mic-hint').textContent = 'Listening... tap to stop';
-    document.getElementById('r1').classList.add('go');
-    document.getElementById('r2').classList.add('go');
-    document.getElementById('r3').classList.add('go');
-    log('Listening...', 'info');
-  };
+    listening = true
+    document.getElementById('btn-mic').classList.add('listening')
+    document.getElementById('btn-mic').textContent = '⏹'
+    document.getElementById('mic-hint').textContent = 'Listening... tap to stop'
+    document.getElementById('r1').classList.add('go')
+    document.getElementById('r2').classList.add('go')
+    document.getElementById('r3').classList.add('go')
+    log('Listening...', 'info')
+  }
 
   recognition.onresult = (e) => {
-    let interim = '', final = '';
+    let interim = '', final = ''
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript.toLowerCase().trim();
-      if (e.results[i].isFinal) final += t;
-      else interim += t;
+      const t = e.results[i][0].transcript.toLowerCase().trim()
+      if (e.results[i].isFinal) final += t
+      else interim += t
     }
-    document.getElementById('transcript').textContent = interim || final || '—';
-    if (final) { log('Heard: "' + final + '"'); processVoice(final); }
-  };
+    document.getElementById('transcript').textContent = interim || final || '—'
+    if (final) { log('Heard: "' + final + '"'); processVoice(final) }
+  }
 
   recognition.onerror = (e) => {
-    log('Mic error: ' + e.error, 'err');
-    if (e.error === 'not-allowed') { alert('Microphone permission denied!'); stopListening(); }
-  };
+    log('Mic error: ' + e.error, 'err')
+    if (e.error === 'not-allowed') { alert('Microphone permission denied!'); stopListening() }
+  }
 
-  recognition.onend = () => { if (listening) recognition.start(); }
-  recognition.start();
+  recognition.onend = () => { if (listening) recognition.start() }
+  recognition.start()
 }
 
 function stopListening() {
-  listening = false;
-  if (recognition) recognition.stop();
-  document.getElementById('btn-mic').classList.remove('listening');
-  document.getElementById('btn-mic').textContent = '🎤';
-  document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command';
-  document.getElementById('r1').classList.remove('go');
-  document.getElementById('r2').classList.remove('go');
-  document.getElementById('r3').classList.remove('go');
-  document.getElementById('transcript').textContent = '—';
-  log('Stopped listening');
+  listening = false
+  if (recognition) recognition.stop()
+  document.getElementById('btn-mic').classList.remove('listening')
+  document.getElementById('btn-mic').textContent = '🎤'
+  document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command'
+  document.getElementById('r1').classList.remove('go')
+  document.getElementById('r2').classList.remove('go')
+  document.getElementById('r3').classList.remove('go')
+  document.getElementById('transcript').textContent = '—'
+  log('Stopped listening')
 }
 
 function processVoice(text) {
-  if (currentMode === 'B') { processVoiceCruise(text); return; }
+  if (currentMode === 'B') { processVoiceCruise(text); return }
 
   for (const kw of CMD_KEYS_BY_LENGTH) {
     if (text.includes(kw)) {
-      const cmd = CMDS[kw];
-      log('Matched "' + kw + '" → sending ' + cmd.c, 'ok');
-      sendRaw(cmd.c, cmd.name, cmd.icon);
-      return;
+      const cmd = CMDS[kw]
+      log('Matched "' + kw + '" → sending ' + cmd.c, 'ok')
+      sendRaw(cmd.c, cmd.name, cmd.icon)
+      return
     }
   }
-  log('Not recognized: "' + text + '"', 'err');
+  log('Not recognized: "' + text + '"', 'err')
 }
 
 function processVoiceCruise(text) {
   if (text.includes('kiri') || text.includes('left')) {
-    sendRaw('LF', 'Cruise: Steer Left', '⬅️');
-    log('Cruise: steered left, resuming forward', 'ok');
+    sendRaw('LF', 'Cruise: Belok Kiri', '⬅️')
+    log('Cruise: belok kiri lalu lanjut maju', 'ok')
   } else if (text.includes('kanan') || text.includes('right')) {
-    sendRaw('RF', 'Cruise: Steer Right', '➡️');
-    log('Cruise: steered right, resuming forward', 'ok');
+    sendRaw('RF', 'Cruise: Belok Kanan', '➡️')
+    log('Cruise: belok kanan lalu lanjut maju', 'ok')
   } else if (text.includes('berhenti') || text.includes('stop') || text.includes('halt')) {
-    stopCruise();
+    stopCruise()
   } else if (text.includes('maju') || text.includes('jalan') || text.includes('go') || text.includes('forward')) {
-    if (!cruiseActive) startCruise();
+    if (!cruiseActive) startCruise()
   } else if (text.includes('klakson') || text.includes('horn') || text.includes('honk')) {
-    sendRaw('K', 'Horn', '📯');
+    sendRaw('K', 'Horn', '📯')
   } else {
-    log('Unrecognized in cruise mode: "' + text + '"', 'err');
+    log('Ga dikenali di mode cruise: "' + text + '"', 'err')
   }
 }
 
-log('App ready. Connect to Micro:bit to start.', 'info');
+log('App ready. Connect to Micro:bit to start.', 'info')
 </script>
 </body>
 </html>
