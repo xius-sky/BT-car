@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Voice Car Control</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0c14;
+    --surface: #12151f;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --green: #00ff88;
+    --red: #ff3d5a;
+    --yellow: #ffd700;
+    --text: #e2e8ff;
+    --muted: #5a6380;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* STATUS BAR */
+  .status-bar {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+  }
+
+  .status-left { display: flex; align-items: center; gap: 8px; }
+
+  .dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.connecting { background: var(--yellow); animation: blink 0.8s infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  @keyframes ripple { 0%{transform:scale(1);opacity:0.5} 100%{transform:scale(2.6);opacity:0} }
+
+  .status-text { font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+  .status-text.connected { color: var(--green); }
+
+  /* CONNECT BUTTON */
+  .btn-connect {
+    width: 100%;
+    max-width: 420px;
+    padding: 13px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.92rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    margin-bottom: 20px;
+  }
+  .btn-connect:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-connect.connected { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.06); }
+  .btn-connect.connecting { border-color: var(--yellow); color: var(--yellow); }
+
+  /* MIC */
+  .mic-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .mic-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 130px;
+    height: 130px;
+    margin-bottom: 10px;
+  }
+
+  .ripple {
+    position: absolute;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    opacity: 0;
+  }
+  .ripple.go { animation: ripple 1.3s ease-out infinite; }
+  .ripple.r2 { animation-delay: 0.43s; }
+  .ripple.r3 { animation-delay: 0.86s; }
+
+  .btn-mic {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    color: white;
+    font-size: 2.5rem;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 28px rgba(124,58,237,0.45);
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .btn-mic:active { transform: scale(0.93); }
+  .btn-mic.listening {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    box-shadow: 0 0 36px rgba(220,38,38,0.5);
+  }
+  .btn-mic:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .mic-hint { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+
+  /* LANGUAGE TOGGLE */
+  .lang-toggle {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .lang-btn {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .lang-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+  /* TRANSCRIPT */
+  .transcript {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+  }
+  .t-label { font-size: 0.65rem; color: var(--muted); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 5px; }
+  .t-text { font-size: 0.95rem; min-height: 22px; }
+
+  /* MODE TABS */
+  .section-label {
+    width: 100%;
+    max-width: 420px;
+    font-size: 0.68rem;
+    color: var(--muted);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .mode-tabs {
+    width: 100%;
+    max-width: 420px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .mode-tab {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .mode-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+  .mode-desc {
+    width: 100%;
+    max-width: 420px;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-bottom: 12px;
+    line-height: 1.4;
+  }
+
+  /* CRUISE PANEL (mode B) */
+  .cruise-panel {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .cruise-status { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+  .cruise-btn {
+    background: var(--card);
+    border: 1.5px solid var(--green);
+    color: var(--green);
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .cruise-btn.active { background: rgba(255,61,90,0.08); border-color: var(--red); color: var(--red); }
+
+  /* LAST COMMAND */
+  .last-cmd {
+    width: 100%;
+    max-width: 420px;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: border-color 0.3s;
+  }
+  .last-cmd.sent { border-color: var(--green); }
+  .cmd-icon { font-size: 1.8rem; }
+  .cmd-info { flex: 1; }
+  .cmd-name { font-size: 0.95rem; font-weight: 700; }
+  .cmd-detail { font-size: 0.72rem; color: var(--muted); margin-top: 2px; font-family: monospace; }
+  .cmd-sent { font-size: 0.7rem; color: var(--green); font-weight: 700; display: none; }
+  .cmd-sent.show { display: block; }
+
+  /* COMMAND BUTTONS */
+  .cmd-grid {
+    width: 100%;
+    max-width: 420px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .cmd-btn {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 6px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .cmd-btn:active { transform: scale(0.94); }
+  .cmd-btn.flash { border-color: var(--accent); background: rgba(0,212,255,0.08); }
+  .cmd-btn-icon { font-size: 1.3rem; margin-bottom: 3px; }
+  .cmd-btn-word { font-size: 0.73rem; font-weight: 700; }
+  .cmd-btn-char { font-size: 0.62rem; color: var(--muted); font-family: monospace; margin-top: 1px; }
+
+  /* RAW COMMAND INPUT */
+  .raw-row {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .raw-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: monospace;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+  }
+  .raw-input:focus { outline: none; border-color: var(--accent); }
+  .raw-send {
+    background: var(--accent);
+    color: #001018;
+    border: none;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .raw-hint {
+    width: 100%;
+    max-width: 420px;
+    font-size: 0.66rem;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* LOG */
+  .log {
+    width: 100%;
+    max-width: 420px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    max-height: 110px;
+    overflow-y: auto;
+  }
+  .log-row {
+    display: flex;
+    gap: 8px;
+    font-size: 0.7rem;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .log-t { color: var(--muted); font-family: monospace; min-width: 48px; }
+  .log-m { flex: 1; }
+  .log-m.ok { color: var(--green); }
+  .log-m.err { color: var(--red); }
+  .log-m.info { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<h1>🚗 Voice Car Control</h1>
+<p class="subtitle">Micro:bit Bluetooth · Mode A/B · Chrome Android only</p>
+
+<div class="status-bar">
+  <div class="status-left">
+    <div class="dot" id="dot"></div>
+    <span class="status-text" id="status-text">Not connected</span>
+  </div>
+  <span style="font-size:0.7rem;color:var(--muted)" id="device-name"></span>
+</div>
+
+<button class="btn-connect" id="btn-connect" onclick="connectBluetooth()">
+  📡 Connect to Micro:bit
+</button>
+
+<div class="mic-section">
+  <div class="mic-wrap">
+    <div class="ripple r1" id="r1"></div>
+    <div class="ripple r2" id="r2"></div>
+    <div class="ripple r3" id="r3"></div>
+    <button class="btn-mic" id="btn-mic" onclick="toggleListen()" disabled>🎤</button>
+  </div>
+  <div class="mic-hint" id="mic-hint">Connect first to enable voice</div>
+  <div class="lang-toggle">
+    <button class="lang-btn active" id="lang-id" onclick="setLang('id-ID')">🇮🇩 Indonesia</button>
+    <button class="lang-btn" id="lang-en" onclick="setLang('en-US')">🇬🇧 English</button>
+  </div>
+</div>
+
+<div class="transcript">
+  <div class="t-label">You said</div>
+  <div class="t-text" id="transcript">—</div>
+</div>
+
+<div class="section-label">Mode suara</div>
+<div class="mode-tabs">
+  <button class="mode-tab active" id="tab-A" onclick="setMode('A')">🅰️ Command</button>
+  <button class="mode-tab" id="tab-B" onclick="setMode('B')">🅱️ Cruise</button>
+</div>
+<div class="mode-desc" id="mode-desc">Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.</div>
+
+<div class="cruise-panel" id="cruise-panel">
+  <div class="cruise-status" id="cruise-status">⏸ Cruise nonaktif</div>
+  <button class="cruise-btn" id="cruise-btn" onclick="toggleCruise()">▶️ Mulai Jalan</button>
+</div>
+
+<div class="last-cmd" id="last-cmd">
+  <div class="cmd-icon" id="cmd-icon">⏳</div>
+  <div class="cmd-info">
+    <div class="cmd-name" id="cmd-name">Waiting for command</div>
+    <div class="cmd-detail" id="cmd-detail">Nothing sent yet</div>
+    <div class="cmd-sent" id="cmd-sent">✓ Sent to Micro:bit</div>
+  </div>
+</div>
+
+<div class="section-label">Tap to send manually</div>
+<div class="cmd-grid">
+  <div class="cmd-btn" id="cb-F" onclick="sendCmd('F','Forward','⬆️')">
+    <div class="cmd-btn-icon">⬆️</div>
+    <div class="cmd-btn-word">Forward</div>
+    <div class="cmd-btn-char">F</div>
+  </div>
+  <div class="cmd-btn" id="cb-B" onclick="sendCmd('B','Backward','⬇️')">
+    <div class="cmd-btn-icon">⬇️</div>
+    <div class="cmd-btn-word">Backward</div>
+    <div class="cmd-btn-char">B</div>
+  </div>
+  <div class="cmd-btn" id="cb-T" onclick="sendCmd('T','Stop','🛑')">
+    <div class="cmd-btn-icon">🛑</div>
+    <div class="cmd-btn-word">Stop</div>
+    <div class="cmd-btn-char">T</div>
+  </div>
+  <div class="cmd-btn" id="cb-L" onclick="sendCmd('L','Left','⬅️')">
+    <div class="cmd-btn-icon">⬅️</div>
+    <div class="cmd-btn-word">Left</div>
+    <div class="cmd-btn-char">L</div>
+  </div>
+  <div class="cmd-btn" id="cb-R" onclick="sendCmd('R','Right','➡️')">
+    <div class="cmd-btn-icon">➡️</div>
+    <div class="cmd-btn-word">Right</div>
+    <div class="cmd-btn-char">R</div>
+  </div>
+  <div class="cmd-btn" id="cb-K" onclick="sendCmd('K','Horn','📯')">
+    <div class="cmd-btn-icon">📯</div>
+    <div class="cmd-btn-word">Horn</div>
+    <div class="cmd-btn-char">K</div>
+  </div>
+  <div class="cmd-btn" id="cb-M" onclick="sendCmd('M','Sharp Turn','🌀')">
+    <div class="cmd-btn-icon">🌀</div>
+    <div class="cmd-btn-word">Sharp Turn</div>
+    <div class="cmd-btn-char">M</div>
+  </div>
+  <div class="cmd-btn" id="cb-D" onclick="sendCmd('D','Zigzag','〰️')">
+    <div class="cmd-btn-icon">〰️</div>
+    <div class="cmd-btn-word">Zigzag</div>
+    <div class="cmd-btn-char">D</div>
+  </div>
+  <div class="cmd-btn" id="cb-U" onclick="sendCmd('U','Spin Right','↩️')">
+    <div class="cmd-btn-icon">↩️</div>
+    <div class="cmd-btn-word">Spin Right</div>
+    <div class="cmd-btn-char">U</div>
+  </div>
+  <div class="cmd-btn" id="cb-V" onclick="sendCmd('V','Spin Left','↪️')">
+    <div class="cmd-btn-icon">↪️</div>
+    <div class="cmd-btn-word">Spin Left</div>
+    <div class="cmd-btn-char">V</div>
+  </div>
+  <div class="cmd-btn" id="cb-DANCE" onclick="sendCmd('DANCE','Dance Party','💃')">
+    <div class="cmd-btn-icon">💃</div>
+    <div class="cmd-btn-word">Dance</div>
+    <div class="cmd-btn-char">DANCE</div>
+  </div>
+</div>
+
+<div class="section-label">Atau tulis kode sendiri</div>
+<div class="raw-row">
+  <input type="text" id="raw-input" class="raw-input" placeholder="misal: FFF atau DANCE" autocomplete="off" onkeydown="if(event.key==='Enter'){sendRawInput()}">
+  <button class="raw-send" onclick="sendRawInput()">Kirim</button>
+</div>
+<div class="raw-hint">Bisa gabung beberapa huruf sekaligus (misal "FFRB"). Maks ± 18 karakter sekali kirim (batas Bluetooth).</div>
+
+<div class="log" id="log"></div>
+
+<script>
+// Bluetooth UART UUIDs (micro:bit UART Service)
+// PENTING: 6E400002 = TX Characteristic → micro:bit yang KIRIM data ke HP (cuma Indicate, TIDAK bisa ditulis)
+//          6E400003 = RX Characteristic → HP yang KIRIM data ke micro:bit (Write / Write Without Response)
+// Sesuai spesifikasi resmi Bluetooth profile micro:bit (Bluetooth Developer Studio Profile Report)
+const UART_SVC  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+const UART_RX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // write (phone → microbit) — INI YANG BENER
+
+let btDevice = null
+let btChar   = null
+let connected = false
+let listening = false
+let recognition = null
+let voiceLang = 'id-ID'
+let currentMode = 'A'   // 'A' = command per perintah, 'B' = cruise (jalan terus)
+let cruiseActive = false
+let cruiseTimer = null
+
+// ---- VOICE COMMANDS (Mode A) ----
+// Kata kunci lebih panjang/spesifik ("spin left") dicek duluan sebelum yang
+// pendek ("left"), biar ga ketuker pas ngomong frasa gabungan.
+const CMDS = {
+  'forward':      { c:'F', name:'Forward',    icon:'⬆️' },
+  'maju':         { c:'F', name:'Forward',    icon:'⬆️' },
+  'backward':     { c:'B', name:'Backward',   icon:'⬇️' },
+  'reverse':      { c:'B', name:'Backward',   icon:'⬇️' },
+  'mundur':       { c:'B', name:'Backward',   icon:'⬇️' },
+  'spin right':   { c:'U', name:'Spin Right', icon:'↩️' },
+  'putar kanan':  { c:'U', name:'Spin Right', icon:'↩️' },
+  'spin left':    { c:'V', name:'Spin Left',  icon:'↪️' },
+  'putar kiri':   { c:'V', name:'Spin Left',  icon:'↪️' },
+  'sharp turn':   { c:'M', name:'Sharp Turn', icon:'🌀' },
+  'belok tajam':  { c:'M', name:'Sharp Turn', icon:'🌀' },
+  'left':         { c:'L', name:'Left',       icon:'⬅️' },
+  'kiri':         { c:'L', name:'Left',       icon:'⬅️' },
+  'right':        { c:'R', name:'Right',      icon:'➡️' },
+  'kanan':        { c:'R', name:'Right',      icon:'➡️' },
+  'stop':         { c:'T', name:'Stop',       icon:'🛑' },
+  'halt':         { c:'T', name:'Stop',       icon:'🛑' },
+  'berhenti':     { c:'T', name:'Stop',       icon:'🛑' },
+  'horn':         { c:'K', name:'Horn',       icon:'📯' },
+  'honk':         { c:'K', name:'Horn',       icon:'📯' },
+  'klakson':      { c:'K', name:'Horn',       icon:'📯' },
+  'zigzag':       { c:'D', name:'Zigzag',     icon:'〰️' },
+  'dance':        { c:'DANCE', name:'Dance Party', icon:'💃' },
+  'joget':        { c:'DANCE', name:'Dance Party', icon:'💃' },
+}
+const CMD_KEYS_BY_LENGTH = Object.keys(CMDS).sort((a, b) => b.length - a.length)
+
+// ---- LOG ----
+function log(msg, type='') {
+  const el = document.getElementById('log')
+  const t = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  const row = document.createElement('div')
+  row.className = 'log-row'
+  row.innerHTML = `<span class="log-t">${t}</span><span class="log-m ${type}">${msg}</span>`
+  el.prepend(row)
+  if (el.children.length > 40) el.lastChild.remove()
+}
+
+// ---- BLUETOOTH ----
+async function connectBluetooth() {
+  if (!navigator.bluetooth) {
+    alert('Web Bluetooth not supported.\nUse Chrome on Android.')
+    return
+  }
+  if (connected) { disconnect(); return }
+
+  try {
+    setStatus('connecting')
+    log('Searching for Micro:bit...', 'info')
+
+    btDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: 'BBC micro:bit' }],
+      optionalServices: [UART_SVC]
+    })
+
+    btDevice.addEventListener('gattserverdisconnected', onDisconnected)
+    log('Connecting to ' + btDevice.name + '...', 'info')
+
+    const server  = await btDevice.gatt.connect()
+    const service = await server.getPrimaryService(UART_SVC)
+    btChar        = await service.getCharacteristic(UART_RX)
+
+    setStatus('connected')
+    document.getElementById('device-name').textContent = btDevice.name
+    log('Connected to ' + btDevice.name, 'ok')
+
+    document.getElementById('btn-mic').disabled = false
+    document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command'
+
+  } catch(e) {
+    setStatus('disconnected')
+    log('Failed: ' + e.message, 'err')
+  }
+}
+
+function disconnect() {
+  if (btDevice && btDevice.gatt.connected) btDevice.gatt.disconnect()
+}
+
+function onDisconnected() {
+  connected = false
+  btChar = null
+  setStatus('disconnected')
+  document.getElementById('device-name').textContent = ''
+  log('Micro:bit disconnected', 'err')
+  document.getElementById('btn-mic').disabled = true
+  document.getElementById('mic-hint').textContent = 'Connect first to enable voice'
+  if (listening) stopListening()
+  if (cruiseActive) stopCruise()
+}
+
+function setStatus(s) {
+  const dot  = document.getElementById('dot')
+  const text = document.getElementById('status-text')
+  const btn  = document.getElementById('btn-connect')
+  dot.className = 'dot'
+  if (s === 'connected') {
+    connected = true
+    dot.classList.add('connected')
+    text.textContent = 'Connected'
+    text.className = 'status-text connected'
+    btn.className = 'btn-connect connected'
+    btn.textContent = '✓ Connected — Tap to disconnect'
+  } else if (s === 'connecting') {
+    dot.classList.add('connecting')
+    text.textContent = 'Connecting...'
+    text.className = 'status-text'
+    btn.className = 'btn-connect connecting'
+    btn.textContent = '⏳ Connecting...'
+  } else {
+    text.textContent = 'Not connected'
+    text.className = 'status-text'
+    btn.className = 'btn-connect'
+    btn.textContent = '📡 Connect to Micro:bit'
+  }
+}
+
+// sendRaw = fungsi inti buat kirim TEKS APAPUN (1 huruf ataupun beberapa
+// huruf sekaligus, misal "DANCE" atau "FFRB") ke micro:bit.
+async function sendRaw(text, name, icon) {
+  if (!connected || !btChar) { log('Not connected!', 'err'); return }
+  if (!text) return
+  try {
+    const enc = new TextEncoder()
+    await btChar.writeValueWithoutResponse(enc.encode(text + '\n'))
+    log('Sent "' + text + '" → ' + name, 'ok')
+
+    // Update last command display
+    document.getElementById('cmd-icon').textContent = icon
+    document.getElementById('cmd-name').textContent = name
+    document.getElementById('cmd-detail').textContent = 'Text "' + text + '" sent'
+    document.getElementById('cmd-sent').classList.add('show')
+    document.getElementById('last-cmd').classList.add('sent')
+
+    // Flash button kalau ada tombol yang cocok
+    const btn = document.getElementById('cb-' + text)
+    if (btn) { btn.classList.add('flash'); setTimeout(() => btn.classList.remove('flash'), 600) }
+
+    setTimeout(() => {
+      document.getElementById('last-cmd').classList.remove('sent')
+      document.getElementById('cmd-sent').classList.remove('show')
+    }, 1500)
+
+  } catch(e) {
+    log('Send failed: ' + e.message, 'err')
+  }
+}
+
+// sendCmd dipertahankan biar tombol-tombol lama tetep jalan tanpa perlu diubah
+function sendCmd(char, name, icon) {
+  return sendRaw(char, name, icon)
+}
+
+// Kirim dari kotak teks manual
+function sendRawInput() {
+  const el = document.getElementById('raw-input')
+  const text = el.value.trim().toUpperCase()
+  if (!text) return
+  sendRaw(text, 'Manual: ' + text, '⌨️')
+  el.value = ''
+}
+
+// ---- MODE A / MODE B ----
+function setMode(m) {
+  currentMode = m
+  document.getElementById('tab-A').classList.toggle('active', m === 'A')
+  document.getElementById('tab-B').classList.toggle('active', m === 'B')
+  document.getElementById('cruise-panel').style.display = m === 'B' ? 'flex' : 'none'
+  document.getElementById('mode-desc').textContent = m === 'A'
+    ? 'Ngomong 1 perintah = mobil jalanin 1 gerakan, lalu berhenti nunggu perintah lagi.'
+    : 'Mobil jalan terus ke depan. Ngomong "kiri"/"kanan" buat belok sambil tetep jalan, "berhenti" buat stop.'
+  if (m === 'A' && cruiseActive) stopCruise()
+  log('Ganti ke Mode ' + m, 'info')
+}
+
+// ---- CRUISE (Mode B: mobil jalan terus, suara cuma nyetir) ----
+function toggleCruise() {
+  cruiseActive ? stopCruise() : startCruise()
+}
+
+function startCruise() {
+  if (!connected) { log('Connect ke Micro:bit dulu sebelum mulai cruise!', 'err'); return }
+  cruiseActive = true
+  sendRaw('F', 'Cruise: Forward', '⬆️')
+  // Kirim ulang "F" tiap ~2.3 detik (dikit lebih lama dari durasi F di firmware
+  // yang 2 detik) biar mobil tetep jalan terus tanpa nunggu diem dulu
+  cruiseTimer = setInterval(() => sendRaw('F', 'Cruise: Forward', '⬆️'), 2300)
+  document.getElementById('cruise-status').textContent = '▶️ Cruise aktif — jalan terus'
+  const btn = document.getElementById('cruise-btn')
+  btn.textContent = '⏹ Stop Cruise'
+  btn.classList.add('active')
+  log('Cruise mode ON', 'ok')
+}
+
+function stopCruise() {
+  cruiseActive = false
+  if (cruiseTimer) { clearInterval(cruiseTimer); cruiseTimer = null }
+  sendRaw('T', 'Cruise: Stop', '🛑')
+  document.getElementById('cruise-status').textContent = '⏸ Cruise nonaktif'
+  const btn = document.getElementById('cruise-btn')
+  btn.textContent = '▶️ Mulai Jalan'
+  btn.classList.remove('active')
+  log('Cruise mode OFF', 'info')
+}
+
+// ---- SPEECH ----
+function setLang(lang) {
+  voiceLang = lang
+  document.getElementById('lang-id').classList.toggle('active', lang === 'id-ID')
+  document.getElementById('lang-en').classList.toggle('active', lang === 'en-US')
+  if (recognition) recognition.lang = lang
+  log('Bahasa suara: ' + lang, 'info')
+  if (listening) { stopListening(); startListening() }
+}
+
+function toggleListen() {
+  listening ? stopListening() : startListening()
+}
+
+function startListening() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) { alert('Speech Recognition not supported.\nUse Chrome on Android.'); return }
+
+  recognition = new SR()
+  recognition.lang = voiceLang
+  recognition.continuous = true
+  recognition.interimResults = true
+
+  recognition.onstart = () => {
+    listening = true
+    document.getElementById('btn-mic').classList.add('listening')
+    document.getElementById('btn-mic').textContent = '⏹'
+    document.getElementById('mic-hint').textContent = 'Listening... tap to stop'
+    document.getElementById('r1').classList.add('go')
+    document.getElementById('r2').classList.add('go')
+    document.getElementById('r3').classList.add('go')
+    log('Listening...', 'info')
+  }
+
+  recognition.onresult = (e) => {
+    let interim = '', final = ''
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript.toLowerCase().trim()
+      if (e.results[i].isFinal) final += t
+      else interim += t
+    }
+    document.getElementById('transcript').textContent = interim || final || '—'
+    if (final) { log('Heard: "' + final + '"'); processVoice(final) }
+  }
+
+  recognition.onerror = (e) => {
+    log('Mic error: ' + e.error, 'err')
+    if (e.error === 'not-allowed') { alert('Microphone permission denied!'); stopListening() }
+  }
+
+  recognition.onend = () => { if (listening) recognition.start() }
+  recognition.start()
+}
+
+function stopListening() {
+  listening = false
+  if (recognition) recognition.stop()
+  document.getElementById('btn-mic').classList.remove('listening')
+  document.getElementById('btn-mic').textContent = '🎤'
+  document.getElementById('mic-hint').textContent = 'Tap the mic and speak a command'
+  document.getElementById('r1').classList.remove('go')
+  document.getElementById('r2').classList.remove('go')
+  document.getElementById('r3').classList.remove('go')
+  document.getElementById('transcript').textContent = '—'
+  log('Stopped listening')
+}
+
+function processVoice(text) {
+  if (currentMode === 'B') { processVoiceCruise(text); return }
+
+  for (const kw of CMD_KEYS_BY_LENGTH) {
+    if (text.includes(kw)) {
+      const cmd = CMDS[kw]
+      log('Matched "' + kw + '" → sending ' + cmd.c, 'ok')
+      sendRaw(cmd.c, cmd.name, cmd.icon)
+      return
+    }
+  }
+  log('Not recognized: "' + text + '"', 'err')
+}
+
+function processVoiceCruise(text) {
+  if (text.includes('kiri') || text.includes('left')) {
+    sendRaw('LF', 'Cruise: Belok Kiri', '⬅️')
+    log('Cruise: belok kiri lalu lanjut maju', 'ok')
+  } else if (text.includes('kanan') || text.includes('right')) {
+    sendRaw('RF', 'Cruise: Belok Kanan', '➡️')
+    log('Cruise: belok kanan lalu lanjut maju', 'ok')
+  } else if (text.includes('berhenti') || text.includes('stop') || text.includes('halt')) {
+    stopCruise()
+  } else if (text.includes('maju') || text.includes('jalan') || text.includes('go') || text.includes('forward')) {
+    if (!cruiseActive) startCruise()
+  } else if (text.includes('klakson') || text.includes('horn') || text.includes('honk')) {
+    sendRaw('K', 'Horn', '📯')
+  } else {
+    log('Ga dikenali di mode cruise: "' + text + '"', 'err')
+  }
+}
+
+log('App ready. Connect to Micro:bit to start.', 'info')
+</script>
+</body>
+</html>
